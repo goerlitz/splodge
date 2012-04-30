@@ -10,4 +10,4 @@ for i in $@; do
   gzip -dc $i;
 done \
 | awk '{print $(NF-1)}' | awk -F "/" '{print $3}' \
-| $path/count_reduced-contexts.pl | sort -rn
+| $path/compute_reduced-host-mapping.pl | sort -rn
