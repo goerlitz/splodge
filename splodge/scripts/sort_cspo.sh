@@ -1,6 +1,7 @@
 #!/bin/sh
 #------------------------------------------------------------------------------
-# Sort the RDF quads in CSPO order.
+# Sort the RDF quads in CSPO order and remove duplicates.
+# SPOC quads are reordered to CSPO, sorted, and finally changed back to SPOC.
 ###############################################################################
 
 export LANG=C sort
@@ -8,7 +9,6 @@ export LANG=C sort
 echo "processing $# files..." >&2;
 for i in $@; do
   echo ": $i" >&2;
-  # decompress and move context URI to first column
   gzip -dc $i
 done \
 | awk '{tmp=$(--NF); $(NF)="."; print tmp,$_}' \
