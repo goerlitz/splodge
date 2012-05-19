@@ -31,7 +31,7 @@ shift $(( OPTIND-1 ))
 
 # check settings
 if [ -z "$DICT" ]; then
-  echo "WARNING: a predicate dictionary must be supplied (-d flag).";
+  echo "WARNING: a predicate dictionary must be supplied (use -d flag, or -h for help).";
   exit 1;
 fi
 
@@ -53,7 +53,7 @@ for i in $@; do
   gzip -dc $i | perl -ne '
   BEGIN {
     # prepare predicate dictionary (predicate -> ID)
-    open FILE, "'"$DICT"'" or die "error loading dictionary: $!";
+    open FILE, "'"$DICT"'" or die "error loading dictionary "'"$DICT"'": $!";
     while (<FILE>) { chomp; $dict{"<$_>"} = $. }
     close FILE;
   } {
@@ -68,6 +68,18 @@ for i in $@; do
   | tr -d '<>' | sort >$outfile;  # remove URI brackets and save sorted entitity statistics
 done
 
-# merge generated statistic files
-#echo "files: '$statfiles'";
-sort -m $statfiles | gzip >entity-stats.gz
+# combine generated statistic files and merge duplicates
+echo "merging..." >&2;
+sort -m $statfiles | perl -ne '{
+  chomp; ($uri, @maps) = split /[ ]/;
+  if ($last_uri ne $uri) {
+    print "$last_uri @last_maps\n" if ($last_uri);
+    ($last_uri, @last_maps) = ($uri, @maps);
+    next;
+  }
+  map {map {($key, $val) = split /:/; $data[$idx]->{$key}+=$val;} split /,/; $idx = ++$idx&1; } @maps[0..1], @last_maps[0..1];
+  @last_maps = map {my $plist=$_; defined $_ ? join ",", map {"$_:$plist->{$_}"} sort keys %$_ : ""} @data;
+  @data = ();
+} END {
+  print "$last_uri @last_maps\n";
+}' | gzip >entity-stats_done.gz
