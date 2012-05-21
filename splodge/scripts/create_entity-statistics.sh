@@ -12,6 +12,7 @@ usage: $0 options
 
 OPTIONS:
    -h      Show this message
+   -o      Set output file
    -p      Set predicate dictionary file
    -s      Set source dictionary file
    -t      Set temp dir (for sort)
@@ -23,9 +24,10 @@ export LANG=C;  # speed up sorting
 STATFILE="entity-stats.gz";
 
 # parse arguments
-while getopts "hp:s:t:" OPTION; do
+while getopts "ho:p:s:t:" OPTION; do
   case $OPTION in
     h) usage; exit 1 ;;
+    o) STATFILE=$OPTARG ;;
     p) PDICT=$OPTARG ;;
     s) SDICT=$OPTARG ;;
     t) TMP=$OPTARG ;;
@@ -52,6 +54,7 @@ if [ ! -z "$TMP" ]; then
   fi
 fi
 
+
 # handle all files from argument list
 echo "processing $# files..." >&2;
 for i in $@; do
@@ -74,22 +77,24 @@ for i in $@; do
     while (<FILE>) { chomp; $pdict{"<$_>"} = $. }
     close FILE;
     open FILE, "'"$SDICT"'" or die "error loading dictionary '"$SDICT"': $!";
-    while (<FILE>) { chomp; $sdict{"<$_>"} = $. }
+    while (<FILE>) { chomp; $sdict{"$_"} = $. }
     close FILE;
   } {
     # count predicates (ID) for incoming and outgoing edges of entities (URI/BNode)
     my ($s, $p, $o, @rest) = split; $p = $pdict{$p};
-    $edge->{$s}[1]->{$p}++;
-    $edge->{$o}[0]->{$p}++ if ($#rest == 1 && $o !~ "^\"");
+    $rest[$#rest-1] =~ m|//(.*)/|; $ctx = $sdict{$1};
+    $stat->{$s}[1]->{$p}->{$ctx}++;
+    $stat->{$o}[0]->{$p}->{$ctx}++ if ($#rest == 1 && $o !~ "^\"");
   } END {
     # print predicate lists (IDs) with predicate frequency for incoming and outgoing edges of each entity
-    print ((join " ", $_, map {my $plist=$_; defined $_ ? join ",", map {"$_:$plist->{$_}"} keys %$_ : ""} @{$edge->{$_}})."\n") for (keys %$edge);
+    # serialization of entity->predicate->context->count
+    print ((join " ", $_, map {my $pmap=$_; defined $_ ? join ",", map {my $p=$_; map {"$p:$_:$pmap->{$p}->{$_}"} keys %{$pmap->{$p}}} sort keys %$_ : ""} @{$stat->{$_}})."\n") for (keys %$stat);
   }' \
   | tr -d '<>' | sort $TMP >$outfile;  # remove URI brackets and save sorted entitity statistics
 done
 
 
-# merge statistic files and combine duplicates
+# aggregate statistic files and merge duplicates
 echo `date +%X` "merging entity statistics" >&2;
 
 # check if stat file already exists
@@ -103,8 +108,9 @@ else
       ($last_uri, @last_stat) = ($uri, @stat);
       next;
     }
-    map {map {($key, $val) = split /:/; $data[$idx]->{$key}+=$val;} split /,/; $idx = ++$idx&1; } @stat[0..1], @last_stat[0..1];
-    @last_stat = map {my $plist=$_; defined $_ ? join ",", map {"$_:$plist->{$_}"} keys %$_ : ""} @data;
+    map {map {($p, $ctx, $val) = split /:/; $data[$idx]->{$p}->{$ctx}+=$val;} split /,/; $idx = ++$idx&1; } @stat[0..1], @last_stat[0..1];
+    # serialization of entity->predicate->context->count
+    @last_stat = map {my $pmap=$_; defined $_ ? join ",", map {my $p=$_; map {"$p:$_:$pmap->{$p}->{$_}"} keys %{$pmap->{$p}}} sort keys %$_ : ""} @data;  # sort { $a <=> $b } is slower
     @data = ();
   } END {
     print "$last_uri @last_stat\n";
