@@ -13,6 +13,7 @@ usage: $0 options
 OPTIONS:
    -h      Show this message
    -p      Set predicate dictionary file
+   -s      Set source dictionary file
    -t      Set temp dir (for sort)
 EOF
 }
@@ -22,10 +23,11 @@ export LANG=C;  # speed up sorting
 STATFILE="entity-stats.gz";
 
 # parse arguments
-while getopts "hp:t:" OPTION; do
+while getopts "hp:s:t:" OPTION; do
   case $OPTION in
     h) usage; exit 1 ;;
     p) PDICT=$OPTARG ;;
+    s) SDICT=$OPTARG ;;
     t) TMP=$OPTARG ;;
   esac
 done
@@ -34,6 +36,10 @@ shift $(( OPTIND-1 )) # shift consumed arguments
 # check dictionary settings
 if [ -z "$PDICT" ]; then
   echo "WARNING: a predicate dictionary must be supplied (use -p flag, or -h for help).";
+  exit 1;
+fi
+if [ -z "$SDICT" ]; then
+  echo "WARNING: a source dictionary must be supplied (use -s flag, or -h for help).";
   exit 1;
 fi
 # check temp dir settings
@@ -66,6 +72,9 @@ for i in $@; do
     # prepare predicate dictionary (predicate -> ID)
     open FILE, "'"$PDICT"'" or die "error loading dictionary '"$PDICT"': $!";
     while (<FILE>) { chomp; $pdict{"<$_>"} = $. }
+    close FILE;
+    open FILE, "'"$SDICT"'" or die "error loading dictionary '"$SDICT"': $!";
+    while (<FILE>) { chomp; $sdict{"<$_>"} = $. }
     close FILE;
   } {
     # count predicates (ID) for incoming and outgoing edges of entities (URI/BNode)
