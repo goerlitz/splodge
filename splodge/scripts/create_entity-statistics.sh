@@ -1,20 +1,23 @@
 #!/bin/sh
 #------------------------------------------------------------------------------
-# Create entity statistics for incoming and outgoing edges (predicate counts).
-# PARAMS: list of gziped input files.
-# OUTPUT: statistics file for each input file (<filename>_entity-stats.txt).
+# Creates entity statistics for URIs and BNodes in subject/object position of
+# RDF quads. Counts occurences of predicates and contexts (sources).
+# PARAMS: list of gzipped input files, predicate and context dictionary.
+# OUTPUT: gzipped sorted text file with statistics.
+#         Format: three space-separated columns: URI obj-stats subj-stats, i.e.
+#                 URI [(predID:ctxID:count),...] [(predID:ctxID:count),...]
 ###############################################################################
 
 # usage message
 usage() {
 cat << EOF
-usage: $0 options
+usage: $0 options [quad_file.gz [...]]
 
 OPTIONS:
    -h      Show this message
-   -o      Set output file
-   -p      Set predicate dictionary file
-   -s      Set source dictionary file
+   -o      Set output file (gzipped)
+   -p      Set predicate dictionary file (one URI per line)
+   -c      Set context dictionary file (one URI per line)
    -t      Set temp dir (for sort)
 EOF
 }
@@ -24,12 +27,12 @@ export LANG=C;  # speed up sorting
 STATFILE="entity-stats.gz";
 
 # parse arguments
-while getopts "ho:p:s:t:" OPTION; do
+while getopts "ho:p:c:t:" OPTION; do
   case $OPTION in
     h) usage; exit 1 ;;
     o) STATFILE=$OPTARG ;;
     p) PDICT=$OPTARG ;;
-    s) SDICT=$OPTARG ;;
+    c) CDICT=$OPTARG ;;
     t) TMP=$OPTARG ;;
   esac
 done
@@ -40,8 +43,8 @@ if [ -z "$PDICT" ]; then
   echo "WARNING: a predicate dictionary must be supplied (use -p flag, or -h for help).";
   exit 1;
 fi
-if [ -z "$SDICT" ]; then
-  echo "WARNING: a source dictionary must be supplied (use -s flag, or -h for help).";
+if [ -z "$CDICT" ]; then
+  echo "WARNING: a context dictionary must be supplied (use -c flag, or -h for help).";
   exit 1;
 fi
 # check temp dir settings
@@ -62,7 +65,7 @@ for i in $@; do
   outfile=${i%.*}_entity-stats.txt;
   statfiles=$statfiles" "$outfile;
 
-  # check if stat file already exists
+  # check if statistic file fur current chunk already exists
   if [ -e $outfile ] && [ $(stat -c%s "$outfile") -gt "0" ]; then
     echo "skipped '$i': stat file already exists.";
     continue;
@@ -76,13 +79,14 @@ for i in $@; do
     open FILE, "'"$PDICT"'" or die "error loading dictionary '"$PDICT"': $!";
     while (<FILE>) { chomp; $pdict{"<$_>"} = $. }
     close FILE;
-    open FILE, "'"$SDICT"'" or die "error loading dictionary '"$SDICT"': $!";
-    while (<FILE>) { chomp; $sdict{"$_"} = $. }
+    open FILE, "'"$CDICT"'" or die "error loading dictionary '"$CDICT"': $!";
+    while (<FILE>) { chomp; $cdict{"<$_>"} = $. }
     close FILE;
   } {
     # count predicates (ID) for incoming and outgoing edges of entities (URI/BNode)
-    my ($s, $p, $o, @rest) = split; $p = $pdict{$p};
-    $rest[$#rest-1] =~ m|//(.*)/|; $ctx = $sdict{$1};
+    my ($s, $p, $o, @rest) = split; 
+    $p = $pdict{$p};
+    $ctx = $cdict{$rest[$#rest-1]};
     $stat->{$s}[1]->{$p}->{$ctx}++;
     $stat->{$o}[0]->{$p}->{$ctx}++ if ($#rest == 1 && $o !~ "^\"");
   } END {
@@ -97,7 +101,7 @@ done
 # aggregate statistic files and merge duplicates
 echo `date +%X` "merging entity statistics" >&2;
 
-# check if stat file already exists
+# check if output statistic file already exists
 if [ -e $STATFILE ] && [ $(stat -c%s "$STATFILE") -gt "0" ]; then
   echo "skipped merging: '$STATFILE' already exists.";
 else
