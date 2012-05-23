@@ -2,6 +2,7 @@
 #------------------------------------------------------------------------------
 # Creates entity statistics for URIs and BNodes in subject/object position of
 # RDF quads. Counts occurences of predicates and contexts (sources).
+#
 # PARAMS: list of gzipped input files, predicate and context dictionary.
 # OUTPUT: gzipped sorted text file with statistics.
 #         Format: three space-separated columns: URI obj-stats subj-stats, i.e.
@@ -18,13 +19,18 @@ OPTIONS:
    -o      Set output file (gzipped)
    -p      Set predicate dictionary file (one URI per line)
    -c      Set context dictionary file (one URI per line)
-   -t      Set temp dir (for sort)
+   -t      Set temp dir (for sorting)
 EOF
 }
 
-export LANG=C;  # speed up sorting
+# speed up sorting: compare ASCII byte values instead of UTF characters.
+# note: bash can also set variables just for the immediate subprocess.
+#       (e.g. alias sort='LANG=C sort'; in tcsh: env LANG=C sort)
+export LANG=C;  # affects LC_COLLATE for all subprocesses
 
+# set default output files
 STATFILE="entity-stats.gz";
+PATHFILE="path-stats.gz";
 
 # parse arguments
 while getopts "ho:p:c:t:" OPTION; do
@@ -50,7 +56,7 @@ fi
 # check temp dir settings
 if [ ! -z "$TMP" ]; then
   if [ -e "$TMP" ] && [ -d "$TMP" ]; then
-    TMP="-T $TMP";
+    export TMPDIR=$TMP; # setting '-T $TMP' for sort does not seem to work for merge
   else
     echo "invalid temp directory: $TMP";
     exit 1;
@@ -94,7 +100,7 @@ for i in $@; do
     # serialization of entity->predicate->context->count
     print ((join " ", $_, map {my $pmap=$_; defined $_ ? join ",", map {my $p=$_; map {"$p:$_:$pmap->{$p}->{$_}"} keys %{$pmap->{$p}}} sort keys %$_ : ""} @{$stat->{$_}})."\n") for (keys %$stat);
   }' \
-  | tr -d '<>' | sort $TMP >$outfile;  # remove URI brackets and save sorted entitity statistics
+  | tr -d '<>' | sort >$outfile;  # remove URI brackets and save sorted entitity statistics
 done
 
 
@@ -105,7 +111,7 @@ echo `date +%X` "merging entity statistics" >&2;
 if [ -e $STATFILE ] && [ $(stat -c%s "$STATFILE") -gt "0" ]; then
   echo "skipped merging: '$STATFILE' already exists.";
 else
-  sort -m $TMP $statfiles | perl -ne '{
+  sort -m $statfiles | perl -ne '{
     chomp; ($uri, @stat) = split /[ ]/;
     if ($last_uri ne $uri) {
       print "$last_uri @last_stat\n" if ($last_uri);
@@ -123,3 +129,32 @@ else
   echo `date +%X` "done. entity statistics written to $STATFILE" >&2;
 fi
 
+# create predicate paths
+echo `date +%X` "computing predicate paths" >&2;
+#gzip -dc $STATFILE | awk -F"[ ]" '{if ($2) obj++; if ($3) subj++; if ($2 && $3) path++} END {print NR,obj,subj,path}'
+gzip -dc $STATFILE | perl -lane '
+{
+  if ($F[1] && $F[2]) {
+    for (split /,/, $F[1]) {
+      ($p1, $c1, $n1) = split /:/;
+      for (split /,/, $F[2]) {
+        ($p2, $c2, $n2) = split /:/;
+        $stat->{$p1}->{$p2}->{$c1}->{$c2}[0]++;
+        $stat->{$p1}->{$p2}->{$c1}->{$c2}[1] += $n1*$n2;
+      }
+    }
+  }
+} END {
+  for $p1 (sort {$a <=> $b} keys %$stat) {
+    for $p2 (sort {$a <=> $b} keys %{$stat->{$p1}}) {
+      for $c1 (sort {$a <=> $b} keys %{$stat->{$p1}->{$p2}}) {
+        for $c2 (sort {$a <=> $b} keys %{$stat->{$p1}->{$p2}->{$c1}}) {
+          $ref = $stat->{$p1}->{$p2}->{$c1}->{$c2};
+          print join " ", $p1, $p2, $c1, $c2, @{$ref}[0], @{$ref}[1];
+        }
+      }
+    }
+  }
+}' | gzip >$PATHFILE
+
+echo `date +%X` "done. path statistics written to $PATHFILE" >&2;
