@@ -1,7 +1,6 @@
 #!/bin/sh
 #------------------------------------------------------------------------------
-# Sorts the RDF quads in CSPO order and removes duplicates.
-# SPOC quads are transformed to CSPO order, sorted, and changed back to SPOC.
+# Sort the RDF quads in SPOC or CSPO order and remove duplicates.
 ###############################################################################
 
 # usage message
@@ -11,49 +10,64 @@ usage: $0 options [quad_file.gz [...]]
 
 OPTIONS:
    -h      Show this message
-   -o      Set output file (gzipped)
-   -s      Set max memory size for sorting
+   -c      Use CSPO instead of SPOC sort order
+   -s      Set maximum memory size for sorting
    -t      Set temp dir for sorting
    -z      Enable gzip compression for temp files
+   -o      Set output file (gzipped)
 EOF
 }
 
-export LANG=C;  # speed up sorting
+# speed up sorting: compare ASCII byte values instead of UTF characters.
+# (bash can also set variables just for an immediate subprocess, e.g.
+#  alias sort='LANG=C sort'; in tcsh: env LANG=C sort)
+export LANG=C;  # affects LC_COLLATE and all subprocesses
 
-OUTFILE="cspo_sorted.gz";
+# set default output file
+OUTFILE="sorted.gz"
 
 # parse arguments
-while getopts "ho:s:t:z" OPTION; do
+while getopts "hco:s:t:z" OPTION; do
   case $OPTION in
     h) usage; exit 1 ;;
+    c) CSPO=1 ;;
     o) OUTFILE=$OPTARG ;;
     s) MEMSIZE="-S $OPTARG" ;;
-    t) TEMPDIR=$OPTARG ;;
+    t) TMP=$OPTARG ;;
     z) COMPRESS="--compress-program=gzip" ;;
   esac
 done
 shift $(( OPTIND-1 )) # shift consumed arguments
 
 # check temp dir settings
-if [ ! -z "$TEMPDIR" ]; then
-  if [ -e "$TEMPDIR" ] && [ -d "$TEMPDIR" ]; then
-    TEMPDIR="-T $TEMPDIR";
+if [ ! -z "$TMP" ]; then
+  if [ -e "$TMP" ] && [ -d "$TMP" ]; then
+    TMP="-T $TMP";
   else
-    echo "invalid temp directory: $TEMPDIR";
+    echo "invalid temp directory: $TMP";
     exit 1;
   fi
 fi
 
+# prepare sort command (reorder quads for CSPO)
+SORT="sort -u $MEMSIZE $TMP $COMPRESS";
+if [ "$CSPO" = "1" ]; then
+  SORT="awk '{print \$(NF-1),\$0}' | $SORT | cut -f2- -d' '";
+fi
+
+# update output file name
+if [ "$CSPO" = "1" ]; then
+  OUTFILE="cspo_$OUTFILE";
+else
+  OUTFILE="spoc_$OUTFILE";
+fi
+
 # do the sorting
-echo "processing $# files..." >&2;
+echo "sorting $# files..." >&2;
 for i in $@; do
   echo `date +%X` "$i" >&2;
   gzip -dc $i
 done \
-| awk '{tmp=$(--NF); $(NF)="."; print tmp,$_}' \
-| sort -u $MEMSIZE $TEMPDIR $COMPRESS \
-| awk '{$NF=$1; $1=""; $++NF="."; print }' | sed 's/^ //' \
-| gzip >$OUTFILE
+| eval $SORT | gzip >$OUTFILE
 
-#| perl -ne '{m/(.*)(<.*?> )(.*)/;print "$2$1$3\n"}'   # slower
-#| perl -ane '{@ctx=splice(@F,@F-2,1); unshift(@F,@ctx[0]); print "@F\n"}'   # much slower
+echo `date +%X` "done. sorted data written to $OUTFILE" >&2;
