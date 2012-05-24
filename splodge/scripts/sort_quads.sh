@@ -23,9 +23,6 @@ EOF
 #  alias sort='LANG=C sort'; in tcsh: env LANG=C sort)
 export LANG=C;  # affects LC_COLLATE and all subprocesses
 
-# set default output file
-OUTFILE="sorted.gz"
-
 # parse arguments
 while getopts "hco:s:t:z" OPTION; do
   case $OPTION in
@@ -55,19 +52,18 @@ if [ "$CSPO" = "1" ]; then
   SORT="awk '{print \$(NF-1),\$0}' | $SORT | cut -f2- -d' '";
 fi
 
-# update output file name
-if [ "$CSPO" = "1" ]; then
-  OUTFILE="cspo_$OUTFILE";
-else
-  OUTFILE="spoc_$OUTFILE";
+# set name for sort order and default output file
+[ "$CSPO" = "1" ] && ORDER="cspo" || ORDER="spoc";
+if [ -z $OUTFILE ]; then
+  OUTFILE="sorted_$ORDER.gz"
 fi
 
 # do the sorting
-echo "sorting $# files..." >&2;
+echo "sorting $# files... [$ORDER]" >&2;
 for i in $@; do
   echo `date +%X` "$i" >&2;
   gzip -dc $i
 done \
 | eval $SORT | gzip >$OUTFILE
 
-echo `date +%X` "done. sorted data written to $OUTFILE" >&2;
+echo `date +%X` "done. sorted data [$ORDER] written to $OUTFILE" >&2;
