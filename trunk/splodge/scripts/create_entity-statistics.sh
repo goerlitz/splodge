@@ -71,7 +71,7 @@ for i in $@; do
   outfile=${i%.*}_entity-stats.txt;
   statfiles=$statfiles" "$outfile;
 
-  # check if statistic file fur current chunk already exists
+  # check if statistic file for current chunk already exists
   if [ -e $outfile ] && [ $(stat -c%s "$outfile") -gt "0" ]; then
     echo "skipped '$i': stat file already exists.";
     continue;
