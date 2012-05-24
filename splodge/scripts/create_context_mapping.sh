@@ -1,19 +1,20 @@
 #!/bin/sh
 #------------------------------------------------------------------------------
 # Aggregate domains with multiple subdomains, e.g. {bob,jane}.livejournal.com.
-# 1. step: collect statistics: frequency, domain name, and list of subdomains.
-# 2. step: condense quad context to common domain names.
+# 1. step: analyze contexts: frequency of common domain name, subdomain list.
+# 2. step: condense contexts: replace context in quads with condensed domain.
 ###############################################################################
 
 # set default statistic file
-STATFILE="context-stats.txt";
+STATFILE="context-statistics.txt";
+EXTENSION="_condensed-ctx.";
 
 # handle all files from argument list
-echo "processing $# files..." >&2;
+echo "analyzing context of $# files..." >&2;
 
 # check if output statistic file already exists
 if [ -e $STATFILE ] && [ $(stat -c%s "$STATFILE") -gt "0" ]; then
-  echo "skipped analysis: '$STATFILE' already exists.";
+  echo "skipped context analysis: '$STATFILE' already exists.";
 else
   for i in $@; do
     echo `date +%X` "$i" >&2;
@@ -28,8 +29,8 @@ BEGIN {
     my ($ref, @names) = @_; 
     my @keys = keys %$ref;
 
+    # aggregate domains which have multiple subdomains (except .au, .uk, .jp)
     if (@keys > 1 && @names > 1 && (@names > 2 || $names[0] !~ /^(au|uk|jp)$/)) {
-      # aggregate domains which have multiple subdomains
       print sum($ref)," ",(join ".", reverse @names)," ",join ",", dom($ref);
     } else {
       # process all subdomains recursively or print details of fully traversed domain name
@@ -49,10 +50,19 @@ BEGIN {
 fi
 
 # replace quad context with condensed context
+echo "replacing context of $# files..." >&2;
+
 # handle all files from argument list
 for i in $@; do
-  out=${i%.*}"_condensed-uris."${i##*.};
-  echo `date +%X` "updating: $i -> $out" >&2;
+  outfile=${i%.*}$EXTENSION${i##*.};
+
+  # check if statistic file for current chunk already exists
+  if [ -e $outfile ] && [ $(stat -c%s "$outfile") -gt "0" ]; then
+    echo "skipped '$i': updated file already exists.";
+    continue;
+  fi
+
+  echo `date +%X` "updating: $i -> $outfile" >&2;
   gzip -dc $i | perl -lne '
   BEGIN {
     # prepare predicate dictionary (predicate -> ID)
@@ -66,6 +76,6 @@ for i in $@; do
   } {
     my ($first, $host) = m!(.*<.*?//)(.*?)/!;
     print "$first".(exists($dict{$host}) ? $dict{$host} : $host)."/> .";
-  }' | gzip >$out;
+  }' | gzip >$outfile;
 done
-echo `date +%X` "done. all contexts updated." >&2;
+echo `date +%X` "done." >&2;
