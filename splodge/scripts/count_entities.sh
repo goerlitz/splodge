@@ -14,8 +14,7 @@ for i in $@; do
     # note: "index($3,"<") == 1" is faster than "$3 ~ /^</" and "substr($3,1,1)"
 
     if (index($1,"<") == 1) s[$1]++;
-#    if (NF==5 && index($3,"<") == 1) s[$3]++;
-    if (NF==5 && $2 != "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>" && index($3,"<") == 1) s[$3]++;
+    if (NF==5 && index($3,"<") == 1) s[$3]++;
   }
   END {
     for(i in s) print s[i],i
