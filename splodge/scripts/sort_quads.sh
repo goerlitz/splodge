@@ -11,7 +11,7 @@ usage: $0 options [quad_file.gz [...]]
 OPTIONS:
    -h      Show this message
    -c      Use CSPO instead of SPOC sort order
-   -s      Set maximum memory size for sorting
+   -s      Set memory size for sorting (~40% of max mem if -z is used)
    -t      Set temp dir for sorting
    -z      Enable gzip compression for temp files
    -o      Set output file (gzipped)
