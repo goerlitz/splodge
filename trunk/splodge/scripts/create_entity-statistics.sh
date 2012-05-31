@@ -82,19 +82,19 @@ for i in $@; do
   gzip -dc $i | perl -ne '
   BEGIN {
     # prepare predicate dictionary (predicate -> ID)
-    open FILE, "'"$PDICT"'" or die "error loading dictionary '"$PDICT"': $!";
+    open FILE, "'"$PDICT"'" or die "ERROR: cannot load dictionary '"$PDICT"': $!";
     while (<FILE>) { chomp; $pdict{"<$_>"} = $. }
     close FILE;
-    open FILE, "'"$CDICT"'" or die "error loading dictionary '"$CDICT"': $!";
+    open FILE, "'"$CDICT"'" or die "ERROR: cannot load dictionary '"$CDICT"': $!";
     while (<FILE>) { chomp; $cdict{"<$_>"} = $. }
     close FILE;
   } {
     # count predicates (ID) for incoming and outgoing edges of entities (URI/BNode)
-    my ($s, $p, $o, @rest) = split; 
-    $p = $pdict{$p};
-    $ctx = $cdict{$rest[$#rest-1]};
-    $stat->{$s}[1]->{$p}->{$ctx}++;
-    $stat->{$o}[0]->{$p}->{$ctx}++ if ($#rest == 1 && $o !~ "^\"");
+    my ($s, $p, $o, @rest) = split;
+    $pID = $pdict{$p}              or warn "WARNING: invalid predicate \"$p\" for subject $s at <> line $.\n" and next;
+    $ctx = $cdict{$rest[$#rest-1]} or warn "WARNING: invalid context $rest[$#rest-1] for subject $s at <> line $.\n" and next;
+    $stat->{$s}[1]->{$pID}->{$ctx}++;                                  # increase counter for (s,pID,ctx)
+    $stat->{$o}[0]->{$pID}->{$ctx}++ if ($#rest == 1 && $o !~ "^\"");  # increase counter for (pID,o,ctx); no literals
   } END {
     # print predicate lists (IDs) with predicate frequency for incoming and outgoing edges of each entity
     # serialization of entity->predicate->context->count
@@ -129,9 +129,16 @@ else
   echo `date +%X` "done. entity statistics written to $STATFILE" >&2;
 fi
 
+# testing the generated entity statistics (sum of all counts (s,p,ctx)
+#gzip -dc $STATFILE | perl -lne '{$sum += (split /:/)[2] for split /,/, (split / /)[2]} END {print $sum}'  # fast
+#gzip -dc $STATFILE | awk -F"[ ]" '{if ($3) {split ($3,a,","); for (i in a) {split (a[i],b,":"); sum+=b[3] } } } END {print sum}'  # 3x slower
+
+exit;
+
 # create predicate paths
 echo `date +%X` "computing predicate paths" >&2;
 #gzip -dc $STATFILE | awk -F"[ ]" '{if ($2) obj++; if ($3) subj++; if ($2 && $3) path++} END {print NR,obj,subj,path}'
+#gzip -dc $STATFILE | grep "^_" | awk -F"[ ]" '{if ($2) obj++; if ($3) subj++; if ($2 && $3) path++} END {print NR,obj,subj,path}'
 gzip -dc $STATFILE | perl -lane '
 {
   if ($F[1] && $F[2]) {
