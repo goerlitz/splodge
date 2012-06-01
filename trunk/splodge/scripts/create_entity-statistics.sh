@@ -133,35 +133,3 @@ fi
 #gzip -dc $STATFILE | perl -lne '{$sum += (split /:/)[2] for split /,/, (split / /)[2]} END {print $sum}'  # fast
 #gzip -dc $STATFILE | awk -F"[ ]" '{if ($3) {split ($3,a,","); for (i in a) {split (a[i],b,":"); sum+=b[3] } } } END {print sum}'  # 3x slower
 
-exit;
-
-# create predicate paths
-echo `date +%X` "computing predicate paths" >&2;
-#gzip -dc $STATFILE | awk -F"[ ]" '{if ($2) obj++; if ($3) subj++; if ($2 && $3) path++} END {print NR,obj,subj,path}'
-#gzip -dc $STATFILE | grep "^_" | awk -F"[ ]" '{if ($2) obj++; if ($3) subj++; if ($2 && $3) path++} END {print NR,obj,subj,path}'
-gzip -dc $STATFILE | perl -lane '
-{
-  if ($F[1] && $F[2]) {
-    for (split /,/, $F[1]) {
-      ($p1, $c1, $n1) = split /:/;
-      for (split /,/, $F[2]) {
-        ($p2, $c2, $n2) = split /:/;
-        $stat->{$p1}->{$p2}->{$c1}->{$c2}[0]++;
-        $stat->{$p1}->{$p2}->{$c1}->{$c2}[1] += $n1*$n2;
-      }
-    }
-  }
-} END {
-  for $p1 (sort {$a <=> $b} keys %$stat) {
-    for $p2 (sort {$a <=> $b} keys %{$stat->{$p1}}) {
-      for $c1 (sort {$a <=> $b} keys %{$stat->{$p1}->{$p2}}) {
-        for $c2 (sort {$a <=> $b} keys %{$stat->{$p1}->{$p2}->{$c1}}) {
-          $ref = $stat->{$p1}->{$p2}->{$c1}->{$c2};
-          print join " ", $p1, $p2, $c1, $c2, @{$ref}[0], @{$ref}[1];
-        }
-      }
-    }
-  }
-}' | gzip >$PATHFILE
-
-echo `date +%X` "done. path statistics written to $PATHFILE" >&2;
