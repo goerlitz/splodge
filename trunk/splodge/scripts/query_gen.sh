@@ -87,7 +87,7 @@ BEGIN {
       redo if ($c1 == $c3);
       # are there different sources to reach p3@c3 from p1@c1 via p2?
 
-      printf("%5d<%3d> - %5d<%3d> - %5d<%3d> : %d / %d / %d\n", $p1, $c1, $p2, $c2, $p3, $c3, $pstats->{$p2}->{$c2}, $ref->[2], $stat->{$p2}->{$c2}->{$p3}->{$c3}[1]);
+#      printf("%5d<%3d> - %5d<%3d> - %5d<%3d> : %d / %d / %d\n", $p1, $c1, $p2, $c2, $p3, $c3, $pstats->{$p2}->{$c2}, $ref->[2], $stat->{$p2}->{$c2}->{$p3}->{$c3}[1]);
       printf("SELECT * WHERE {\n  ?var1 %s ?var2 .\n  ?var2 %s ?var3 .\n  ?var3 %s ?var4 .\n}\n", map {$pindex{$_}} $p1, $p2, $p3);
     } else {
       redo;
