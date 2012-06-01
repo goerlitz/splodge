@@ -45,8 +45,8 @@ shift $(( OPTIND-1 )) # shift consumed arguments
 # create predicate paths
 gzip -dc $PATHFILE | perl -slne '
 BEGIN {
-  # select random p1, c1, p2, c2
-  sub select { $ref=@_[0]; return (@_ && ref($ref) eq "HASH") ? map {$_, &select($ref->{$_})} (keys %$ref)[int(rand(keys %$ref))] : () };
+  # choose p1, c1, p2, c2 randomly (recursive traversal of hash)
+  sub choose { my $ref=@_[0]; return (@_ && ref($ref) eq "HASH") ? map {$_, &choose($ref->{$_})} (keys %$ref)[int(rand(keys %$ref))] : () };
 
 #  print STDERR ((join ":", reverse ((localtime(time))[0..2])), " loading path statistics");
   $time = `date +%X`; chomp($time); print STDERR "$time loading path statistics";
@@ -58,12 +58,17 @@ BEGIN {
   srand(42);  # fixed seed for rand()
 
   while ($runs--) {
-    ($p1, $c1, $p2, $c2) = &select($stat);
-    $entities = @{$stat->{$p1}->{$c1}->{$p2}->{$c2}}[0];
-    $count2   = @{$stat->{$p1}->{$c1}->{$p2}->{$c2}}[2];
+    my ($p1, $c1, $p2, $c2) = &choose($stat);
+    my $ref = $stat->{$p1}->{$c1}->{$p2}->{$c2};
 
-    printf("%5d[%d] - %5d[%2d] : %3d[%2d] - %3d[%d] : %d / %d\n", $p1, scalar @p1_keys, $p2, scalar @p2_keys, $c1, scalar @c1_keys, $c2, scalar @c2_keys, $entities, $count2);
-#    print "$p1\[".@p1_keys."] - $p2\[".@p2_keys."]";
+    if ($stat->{$p2} && $stat->{$p2}->{$c2}) {
+      my ($p3, $c3) = &choose($stat->{$p2}->{$c2});
+      redo if ($c1 == $c3);
+      printf("%5d<%3d> - %5d<%3d> - %5d<%3d> : %d / %d / %d\n", $p1, $c1, $p2, $c2, $p3, $c3, $ref->[0], $ref->[2], $stat->{$p2}->{$c2}->{$p3}->{$c3}[1]);
+    } else {
+#      printf("%5d<%3d> - %5d<%3d> - NO MATCH \n", $p1, $c1, $p2, $c2, $ref->[0], $ref->[2]);
+      redo;
+    }
   }
 }' -- -runs=$COUNT 
 
