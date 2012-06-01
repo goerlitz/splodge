@@ -7,7 +7,7 @@
 # usage message
 usage() {
 cat << EOF
-usage: $0 options [quad_file.gz [...]]
+usage: $0 options
 
 OPTIONS:
    -h      Show this message
