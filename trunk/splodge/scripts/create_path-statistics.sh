@@ -33,9 +33,7 @@ shift $(( OPTIND-1 )) # shift consumed arguments
 
 
 # create predicate paths
-echo `date +%X` "computing path paths" >&2;
-#gzip -dc $STATFILE | awk -F"[ ]" '{if ($2) obj++; if ($3) subj++; if ($2 && $3) path++} END {print NR,obj,subj,path}'
-#gzip -dc $STATFILE | grep "^_" | awk -F"[ ]" '{if ($2) obj++; if ($3) subj++; if ($2 && $3) path++} END {print NR,obj,subj,path}'
+echo `date +%X` "computing path statistics" >&2;
 gzip -dc $STATFILE | perl -lne '
 {
   ($entity, $stat1, $stat2) = split / /;
@@ -51,6 +49,8 @@ gzip -dc $STATFILE | perl -lne '
     }
   }
 } END {
+  $time = `date +%X`;
+  print STDERR "$time writing path statistics";
   for $p1 (sort {$a <=> $b} keys %$stat) {
     for $p2 (sort {$a <=> $b} keys %{$stat->{$p1}}) {
       for $c1 (sort {$a <=> $b} keys %{$stat->{$p1}->{$p2}}) {
@@ -64,3 +64,7 @@ gzip -dc $STATFILE | perl -lne '
 }' | gzip >$PATHFILE
 
 echo `date +%X` "done. path statistics written to $PATHFILE" >&2;
+
+#basic path stats (incl. bnodes)
+#gzip -dc $STATFILE | awk -F"[ ]" '{if ($2) obj++; if ($3) subj++; if ($2 && $3) path++} END {print NR,obj,subj,path}'
+#gzip -dc $STATFILE | grep "^_" | awk -F"[ ]" '{if ($2) obj++; if ($3) subj++; if ($2 && $3) path++} END {print NR,obj,subj,path}'
