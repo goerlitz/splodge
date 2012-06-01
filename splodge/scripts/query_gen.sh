@@ -11,6 +11,7 @@ usage: $0 options
 OPTIONS:
    -h      Show this message
    -i      Set input file (gzipped path statistics)
+   -p      Set predicate dictionary file (one URI per line)
    -n      Number of generated queries
 EOF
 }
@@ -22,15 +23,21 @@ PREDFILE="predicate-stats.gz";
 COUNT=10;
 
 # parse arguments
-while getopts "hn:i:" OPTION; do
+while getopts "hn:i:p:" OPTION; do
   case $OPTION in
     h) usage; exit 1 ;;
     i) PATHFILE=$OPTARG ;;
-    o) PREDFILE=$OPTARG ;;
+    p) PDICT=$OPTARG ;;
     n) COUNT=$OPTARG ;;
   esac
 done
 shift $(( OPTIND-1 )) # shift consumed arguments
+
+# check dictionary settings
+if [ -z "$PDICT" ]; then
+  echo "WARNING: a predicate dictionary must be supplied (use -p flag, or -h for help).";
+  exit 1;
+fi
 
 # analyse path stats
 # * how many different p1, p2 overall
@@ -48,7 +55,11 @@ BEGIN {
   # choose p1, c1, p2, c2 randomly (recursive traversal of hash)
   sub choose { my $ref=@_[0]; return (@_ && ref($ref) eq "HASH") ? map {$_, &choose($ref->{$_})} (keys %$ref)[int(rand(keys %$ref))] : () };
 
-#  print STDERR ((join ":", reverse ((localtime(time))[0..2])), " loading path statistics");
+  # prepare predicate dictionary (predicate -> ID)
+  open FILE, "'"$PDICT"'" or die "ERROR: cannot load dictionary '"$PDICT"': $!";
+  while (<FILE>) { chomp; $pdict{"<$_>"} = $.; $pindex{"$."} = "<$_>"}
+  close FILE;
+
   $time = `date +%X`; chomp($time); print STDERR "$time loading path statistics";
 } { # load only path statistics of predicates which span sources
   ($p1, $p2, $c1, $c2, @counts) = split;
@@ -65,6 +76,7 @@ BEGIN {
       my ($p3, $c3) = &choose($stat->{$p2}->{$c2});
       redo if ($c1 == $c3);
       printf("%5d<%3d> - %5d<%3d> - %5d<%3d> : %d / %d / %d\n", $p1, $c1, $p2, $c2, $p3, $c3, $ref->[0], $ref->[2], $stat->{$p2}->{$c2}->{$p3}->{$c3}[1]);
+      printf("SELECT * WHERE {\n?var1 %s ?var2 .\n?var2 %s ?var3 .\n?var3 %s ?var4 .\n}\n", $p1, $p2, $p3);
     } else {
 #      printf("%5d<%3d> - %5d<%3d> - NO MATCH \n", $p1, $c1, $p2, $c2, $ref->[0], $ref->[2]);
       redo;
