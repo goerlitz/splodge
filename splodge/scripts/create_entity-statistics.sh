@@ -130,6 +130,6 @@ else
 fi
 
 # testing the generated entity statistics (sum of all counts (s,p,ctx)
-#gzip -dc $STATFILE | perl -lne '{$sum += (split /:/)[2] for split /,/, (split / /)[2]} END {print $sum}'  # fast
+#gzip -dc $STATFILE | perl -lne '{$sum += (split /:/)[2] for split /,/, (split / /)[2]} END {print $sum}'  # fastest
 #gzip -dc $STATFILE | awk -F"[ ]" '{if ($3) {split ($3,a,","); for (i in a) {split (a[i],b,":"); sum+=b[3] } } } END {print sum}'  # 3x slower
 
