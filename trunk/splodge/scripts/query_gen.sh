@@ -11,7 +11,7 @@ usage: $0 options
 OPTIONS:
    -h      Show this message
    -i      Set input file (gzipped path statistics)
-   -n      Number of generated queries
+   -n      Number of queries to generate
    -p      Set predicate dictionary file (one predicate URI per line)
    -s      Set predicate statistics file (one predicate stat per line)
 EOF
@@ -41,40 +41,36 @@ if [ -z "$PDICT" ]; then
   exit 1;
 fi
 if [ -z "$PSTAT" ]; then
-  echo "WARNING: apredicate statistics must be supplied (use -s flag, or -h for help).";
+  echo "WARNING: predicate statistics must be supplied (use -s flag, or -h for help).";
   exit 1;
 fi
 
-# analyse path stats
-# * how many different p1, p2 overall
-# * how many different p2 for p1: min/max/mean (and vice versa?)
-# * how often occurs p2 in any p1 (distribution)
-# * how many different c1, c2 overall
-# * how many different c2 for p1: min/max/mean
 
-#gzip -dc btc2011/btc2011-path-statistics.gz | awk '{if ($3 != $4) print $1}' | uniq | wc -l  # fastest
-#gzip -dc btc2011/btc2011-path-statistics.gz | perl -lane '{print $F[0] if ($F[2] != $F[3])}' | uniq | wc -l
-
-# create predicate paths
-gzip -dc $PATHFILE | perl -slne '
-BEGIN {
-  # choose p1, c1, p2, c2 randomly (recursive traversal of hash)
-  sub choose { my $ref=@_[0]; return (@_ && ref($ref) eq "HASH") ? map {$_, &choose($ref->{$_})} (keys %$ref)[int(rand(keys %$ref))] : () }
+# query generation.
+perl -sle '
+  # INITIALIZE STATISTICS
+  $time = `date +%X`; chomp($time); print STDERR "$time loading predicate and path statistics";
 
   # prepare predicate dictionary (ID -> predicate)
   open FILE, "'"$PDICT"'" or die "ERROR: cannot load dictionary '"$PDICT"': $!";
-  while (<FILE>) { chomp; $pindex{"$."} = "<$_>"}
+  while (<FILE>) { chomp; $pindex{"$."} = "<$_>" }
   close FILE;
   # prepare predicate statistics (predicate -> ID, stats)
-  open FILE, "'"$PSTAT"'" or die "ERROR: cannot load statistics '"$PSTAT"': $!";
-  while (<FILE>) { chomp; ($p, $c, $s, $stats) = split; for (split /,/, $stats) { my ($ctx, $n) = split /:/; $pstats->{$p}->{$ctx}=$n }}
+  open FILE, "'"$PSTAT"'" or die "ERROR: cannot load predicate statistics '"$PSTAT"': $!";
+  while (<FILE>) { chomp; ($p, $c, $s, $stats) = split; for (split /,/, $stats) { my ($ctx, $n) = split /:/; $pstats->{$p}->{$ctx}=$n } }
+  close FILE;
+  # prepare predicate statistics (predicate -> ID, stats)
+  open FILE, "gzip -dc '"$PATHFILE"'|" or die "ERROR: cannot load path statistics '"$PATHFILE"': $!";
+  while (<FILE>) { chomp; ($p1, $p2, $c1, $c2, @counts) = split; @{$stat->{$p1}->{$c1}->{$p2}->{$c2}} = @counts if ($c1 != $c2); }
   close FILE;
 
-  $time = `date +%X`; chomp($time); print STDERR "$time loading path statistics";
-} { # load only path statistics of predicates which span sources
-  ($p1, $p2, $c1, $c2, @counts) = split;
-  @{$stat->{$p1}->{$c1}->{$p2}->{$c2}} = @counts if ($c1 != $c2);
-} END {
+  # DEFINE FUNCTIONS
+
+  # choose p1, c1, p2, c2 randomly (recursive traversal of stats in hash tree)
+  sub choose { my $ref=@_[0]; return (@_ && ref($ref) eq "HASH") ? map {$_, &choose($ref->{$_})} (keys %$ref)[int(rand(keys %$ref))] : () }
+
+  # GENERATE QUERIES
+
   $time = `date +%X`; chomp($time); print STDERR "$time generating queries";
   srand(42);  # fixed seed for rand()
 
@@ -93,6 +89,6 @@ BEGIN {
       redo;
     }
   }
-}' -- -runs=$COUNT 
+' -- -runs=$COUNT 
 
 echo `date +%X` "done." >&2;
