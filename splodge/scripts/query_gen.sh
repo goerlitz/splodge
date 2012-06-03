@@ -85,11 +85,12 @@ perl -sle '
       my ($p3, $c3) = &choose($stat->{$p2}->{$c2});
       redo if ($c1 == $c3);
 
+      my ($p1c1size, $p2c2size, $p3c3size) = ($pstats->{$p1}->{$c1}, $pstats->{$p2}->{$c2}, $pstats->{$p3}->{$c3});  # number all triples for predicate in context
+      my ($p1c1path, $p2c2path1, $p2c2path2, $p3c3path) = (@$ref[1..2], @{$stat->{$p2}->{$c2}->{$p3}->{$c3}}[1..2]); # number path triples for predicate in context
+
       # print SPARQL query
       printf("SELECT * WHERE {\n  ?var1 %s ?var2 .\n  ?var2 %s ?var3 .\n  ?var3 %s ?var4 .\n}\n", map {$pindex{$_}} $p1, $p2, $p3);
-
-      # print path with pattern counts
-#      printf("%5d<%3d> - %5d<%3d> - %5d<%3d> : %d / %d / %d\n", $p1, $c1, $p2, $c2, $p3, $c3, $pstats->{$p2}->{$c2}, $ref->[2], $stat->{$p2}->{$c2}->{$p3}->{$c3}[1]);
+      printf("# join size: %d [of %d] * %d|%d [of %d] * %d [of %d] triples\n", $p1c1path, $p1c1size, $p2c2path1, $p2c2path2, $p2c2size, $p3c3path, $p3c3size);
     } else {
       redo;
     }
