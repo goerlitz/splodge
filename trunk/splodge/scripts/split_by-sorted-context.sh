@@ -18,7 +18,7 @@ for i in $@; do
     my $host = (split /\//, $ctx)[2];
     if ($ctx ne "$last_ctx") {
       close FILE if ($last_ctx);
-      open FILE, "| gzip >>$dir/$host.nt.gz" or die "ERROR: cannot save file $dir/$host.nt: $!";
+      open FILE, "| gzip >>$dir/$host.nt.gz" or die "ERROR: cannot save file $dir/$host.nt.gz: $!";
       $last_ctx = $ctx;
       print STDERR "next context: $ctx $.";
     }
