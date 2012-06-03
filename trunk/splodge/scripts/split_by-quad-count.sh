@@ -1,13 +1,12 @@
 #!/bin/sh
 #-------------------------------------------------------------------------
-# Splitting quads by context and writing spo triples.
-# Input must be sorted by context - will not be checked.
+# Splitting quads by number of triples.
 ##########################################################################
 
 # usage message
 usage() {
 cat << EOF
-usage: $0 options
+usage: $0 options [quad_file.gz [...]]
 
 OPTIONS:
    -h      Show this message
@@ -58,3 +57,5 @@ for i in $@; do
   print FILE $_;
   END { close FILE }' -- -dir=$DSTDIR -count=$TCOUNT -prefix=$PREFIX
 done
+
+echo `date +%X` "done" >&2;
