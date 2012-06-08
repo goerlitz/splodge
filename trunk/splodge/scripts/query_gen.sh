@@ -53,41 +53,40 @@ perl -sle '
 
   # choose p1, c1, p2, c2 randomly (recursive traversal of stats in hash tree)
   sub choose { my $ref=@_[0]; return (@_ && ref($ref) eq "HASH") ? map {$_, &choose($ref->{$_})} (keys %$ref)[int(rand(keys %$ref))] : () }
+  sub print_path_as_id_list { print join " -> ", map {join ":", @$_} @_ }
+  sub print_path_as_sparql { $v=1; printf "SELECT * WHERE { %s }\n", join " . ", map {"?var$v ".$pindex{@$_[0]}." ?var".++$v} @_ }
+  sub print_path_for_mysql { $v=1; print join ";;", map {"?var$v\$\$".$pindex{@$_[0]}."\$\$?var".++$v."§§".$cindex{@$_[1]}} @_ }
 
   sub create_path_join {
     my ($num_pattern, $num_sources) = @_;
+    my @path = ();
 
     die "path-join must have at least two patterns" if $num_pattern < 2;
     die "path-join must have at least two sources" if $num_sources < 2;
     die "path-join cannot have more sources than patterns" if $num_sources > $num_pattern;
-
-#    first pattern wählen
-#    card p1 merken
-#    nächstes pättern wählen
-#    p2c2 card merken und selectivity berechnen
-
-    my @path = ();
     
-    while (scalar @path < $num_pattern) {
-#      print "path length: ", scalar @path, " of $num_pattern: ", join " -> ", map {join ":", @$_} @path;
+    while (@path < $num_pattern) {
       if (@path == 0) {
         my ($p1, $c1, $p2, $c2) = &choose($stat);
         @path = ([$p1, $c1], [$p2, $c2]);
-#        print "new: ", join " -> ", map {join ":", @$_} @path;
         next;
       }
 
       my ($p, $c) = @{$path[-1]};
       if ($stat->{$p} && $stat->{$p}->{$c}) {
-        my ($p_, $c_) = &choose($stat->{$p}->{$c});
-        push @path, ([$p_, $c_]);
-#        print "new path: ", join " -> ", map {join ":", @$_} @path;
+        push @path, [&choose($stat->{$p}->{$c})];
       } else {
-        # does not work out, retry
-        @path = ();
+        @path = (); # no combination available, retry
       }
+
+      # check number of sources
+      # ToDo: prevent endless loops for impossible query parameters
+      %sources = map { (@$_[1], 1) } @path;
+      @path = () if (keys %sources < @path); # not enough sources included, retry
     }
-    print "done: ", join " -> ", map {join ":", @$_} @path;
+
+    # ToCheck: are there different possible intermediate sources to connect p1@c1 with p3@c3 via p2?
+    return @path;
   }
 
   # INITIALIZE STATISTICS
@@ -115,34 +114,18 @@ perl -sle '
   srand(42);  # fixed seed for rand()
 
   while ($runs--) {
-    &create_path_join(4,2);
+#    &print_path_as_id_list(&create_path_join(4,2));
+    &print_path_as_sparql(&create_path_join(4,2));
+#    &print_path_for_mysql(&create_path_join(4,2));
   }
-exit;
 
-  while ($runs--) {
-    my ($p1, $c1, $p2, $c2) = &choose($stat);
-    my $ref = $stat->{$p1}->{$c1}->{$p2}->{$c2};
+#      my ($p1c1size, $p2c2size, $p3c3size) = ($pstats->{$p1}->{$c1}, $pstats->{$p2}->{$c2}, $pstats->{$p3}->{$c3});  # number all triples for predicate in context
+#      my ($p1c1path, $p2c2path1, $p2c2path2, $p3c3path) = (@$ref[1..2], @{$stat->{$p2}->{$c2}->{$p3}->{$c3}}[1..2]); # number path triples for predicate in context
 
-    # check if current path pattern connected with another pattern spans three sources, otherwise retry
-    # ToDo: prevent endless loop if not possible
-    # ToCheck: are there different possible intermediate sources to connect p1@c1 with p3@c3 via p2?
-    if ($stat->{$p2} && $stat->{$p2}->{$c2}) {
-      my ($p3, $c3) = &choose($stat->{$p2}->{$c2});
-      redo if ($c1 == $c3);
-
-      my ($p1c1size, $p2c2size, $p3c3size) = ($pstats->{$p1}->{$c1}, $pstats->{$p2}->{$c2}, $pstats->{$p3}->{$c3});  # number all triples for predicate in context
-      my ($p1c1path, $p2c2path1, $p2c2path2, $p3c3path) = (@$ref[1..2], @{$stat->{$p2}->{$c2}->{$p3}->{$c3}}[1..2]); # number path triples for predicate in context
-
-      # print SPARQL query
-      $triples=$p2c2path1*$p2c2path2/$p2c2size;
-#      printf("SELECT * WHERE {\n  ?var1 %s ?var2 .\n  ?var2 %s ?var3 .\n  ?var3 %s ?var4 .\n}\n", map {$pindex{$_}} $p1, $p2, $p3);
-      printf("?var1\$\$%s\$\$?var2§§%s;;?var2\$\$%s\$\$?var3§§%s;;?var3\$\$%s\$\$?var4§§%s\n", $pindex{$p1}, $cindex{$c1}, $pindex{$p2}, $cindex{$c2}, $pindex{$p3}, $cindex{$c3});
+#      # print SPARQL query
+#      $triples=$p2c2path1*$p2c2path2/$p2c2size;
 #      printf("# join size: %d [of %d] * %d|%d [of %d] * %d [of %d] triples\n", $p1c1path, $p1c1size, $p2c2path1, $p2c2path2, $p2c2size, $p3c3path, $p3c3size);
 #      printf("%f (%d/%d * %d/%d) %f %s -> %s -> %s\n", ($triples/$p2c2size), $p2c2path1, $p2c2size, $p2c2path2, $p2c2size, $triples, map {$pindex{$_}} $p1, $p2, $p3);
-    } else {
-      redo;
-    }
-  }
 ' -- -runs=$COUNT 
 
 echo `date +%X` "done." >&2;
