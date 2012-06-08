@@ -24,10 +24,11 @@ PSTAT="predicate-stats.gz";
 COUNT=10;
 
 # parse arguments
-while getopts "hn:i:p:s:" OPTION; do
+while getopts "hn:i:c:p:s:" OPTION; do
   case $OPTION in
     h) usage; exit 1 ;;
     i) PATHFILE=$OPTARG ;;
+    c) CDICT=$OPTARG ;;
     p) PDICT=$OPTARG ;;
     s) PSTAT=$OPTARG ;;
     n) COUNT=$OPTARG ;;
@@ -53,10 +54,49 @@ perl -sle '
   # choose p1, c1, p2, c2 randomly (recursive traversal of stats in hash tree)
   sub choose { my $ref=@_[0]; return (@_ && ref($ref) eq "HASH") ? map {$_, &choose($ref->{$_})} (keys %$ref)[int(rand(keys %$ref))] : () }
 
+  sub create_path_join {
+    my ($num_pattern, $num_sources) = @_;
+
+    die "path-join must have at least two patterns" if $num_pattern < 2;
+    die "path-join must have at least two sources" if $num_sources < 2;
+    die "path-join cannot have more sources than patterns" if $num_sources > $num_pattern;
+
+#    first pattern wählen
+#    card p1 merken
+#    nächstes pättern wählen
+#    p2c2 card merken und selectivity berechnen
+
+    my @path = ();
+    
+    while (scalar @path < $num_pattern) {
+#      print "path length: ", scalar @path, " of $num_pattern: ", join " -> ", map {join ":", @$_} @path;
+      if (@path == 0) {
+        my ($p1, $c1, $p2, $c2) = &choose($stat);
+        @path = ([$p1, $c1], [$p2, $c2]);
+#        print "new: ", join " -> ", map {join ":", @$_} @path;
+        next;
+      }
+
+      my ($p, $c) = @{$path[-1]};
+      if ($stat->{$p} && $stat->{$p}->{$c}) {
+        my ($p_, $c_) = &choose($stat->{$p}->{$c});
+        push @path, ([$p_, $c_]);
+#        print "new path: ", join " -> ", map {join ":", @$_} @path;
+      } else {
+        # does not work out, retry
+        @path = ();
+      }
+    }
+    print "done: ", join " -> ", map {join ":", @$_} @path;
+  }
+
   # INITIALIZE STATISTICS
   $time = `date +%X`; chomp($time); print STDERR "$time loading predicate and path statistics";
 
   # prepare predicate dictionary (ID -> predicate)
+  open FILE, "'"$CDICT"'" or die "ERROR: cannot load context list '"$CDICT"': $!";
+  while (<FILE>) { chomp; $cindex{"$."} = "<$_>" }
+  close FILE;
   open FILE, "'"$PDICT"'" or die "ERROR: cannot load predicate list '"$PDICT"': $!";
   while (<FILE>) { chomp; $pindex{"$."} = "<$_>" }
   close FILE;
@@ -75,6 +115,11 @@ perl -sle '
   srand(42);  # fixed seed for rand()
 
   while ($runs--) {
+    &create_path_join(4,2);
+  }
+exit;
+
+  while ($runs--) {
     my ($p1, $c1, $p2, $c2) = &choose($stat);
     my $ref = $stat->{$p1}->{$c1}->{$p2}->{$c2};
 
@@ -89,8 +134,11 @@ perl -sle '
       my ($p1c1path, $p2c2path1, $p2c2path2, $p3c3path) = (@$ref[1..2], @{$stat->{$p2}->{$c2}->{$p3}->{$c3}}[1..2]); # number path triples for predicate in context
 
       # print SPARQL query
-      printf("SELECT * WHERE {\n  ?var1 %s ?var2 .\n  ?var2 %s ?var3 .\n  ?var3 %s ?var4 .\n}\n", map {$pindex{$_}} $p1, $p2, $p3);
-      printf("# join size: %d [of %d] * %d|%d [of %d] * %d [of %d] triples\n", $p1c1path, $p1c1size, $p2c2path1, $p2c2path2, $p2c2size, $p3c3path, $p3c3size);
+      $triples=$p2c2path1*$p2c2path2/$p2c2size;
+#      printf("SELECT * WHERE {\n  ?var1 %s ?var2 .\n  ?var2 %s ?var3 .\n  ?var3 %s ?var4 .\n}\n", map {$pindex{$_}} $p1, $p2, $p3);
+      printf("?var1\$\$%s\$\$?var2§§%s;;?var2\$\$%s\$\$?var3§§%s;;?var3\$\$%s\$\$?var4§§%s\n", $pindex{$p1}, $cindex{$c1}, $pindex{$p2}, $cindex{$c2}, $pindex{$p3}, $cindex{$c3});
+#      printf("# join size: %d [of %d] * %d|%d [of %d] * %d [of %d] triples\n", $p1c1path, $p1c1size, $p2c2path1, $p2c2path2, $p2c2size, $p3c3path, $p3c3size);
+#      printf("%f (%d/%d * %d/%d) %f %s -> %s -> %s\n", ($triples/$p2c2size), $p2c2path1, $p2c2size, $p2c2path2, $p2c2size, $triples, map {$pindex{$_}} $p1, $p2, $p3);
     } else {
       redo;
     }
