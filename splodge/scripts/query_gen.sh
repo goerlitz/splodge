@@ -57,6 +57,32 @@ perl -sle '
   sub print_path_as_sparql { $v=1; printf "SELECT * WHERE { %s }\n", join " . ", map {"?var$v ".$pindex{@$_[0]}." ?var".++$v} @_ }
   sub print_path_for_mysql { $v=1; print join ";;", map {"?var$v\$\$".$pindex{@$_[0]}."\$\$?var".++$v."§§".$cindex{@$_[1]}} @_ }
 
+  sub estimate {
+    my @card;
+    for (0..$#_) { # loop through array index
+      my ($p, $c) = @{$_[$_]};
+      $p_in_c = $pstats->{$p}->{$c};
+      my @p_count;
+      if ($_ < $#_) {
+        my ($p_next, $c_next) = @{$_[$_+1]};
+        push @p_count, @{$stat->{$p}->{$c}->{$p_next}->{$c_next}}[1]
+      }
+      if ($_ > 0) {
+        my ($p_prev, $c_prev) = @{$_[$_-1]};
+        push @p_count, @{$stat->{$p_prev}->{$c_prev}->{$p}->{$c}}[2]
+      }
+      if (@p_count > 1) {
+        my $triples = $p_count[0] * $p_count[1] / $p_in_c;
+        my $selectivity = $triples / $p_in_c;
+        push @card, $triples;
+      } else {
+        push @card, @p_count;
+      }
+      $card = 1; $card *= $_ for (@card);
+      print "[$_] p$p, c$c: ".(join "|", @p_count)." / $p_in_c -- $card[$_]";
+    }
+  }
+
   sub create_path_join {
     my ($num_pattern, $num_sources) = @_;
     my @path = ();
@@ -85,8 +111,10 @@ perl -sle '
       @path = () if (keys %sources < @path); # not enough sources included, retry
     }
 
+    &estimate(@path);
+
     # ToCheck: are there different possible intermediate sources to connect p1@c1 with p3@c3 via p2?
-    return @path;
+    return @path;  # list of array references [predicate, context]
   }
 
   # INITIALIZE STATISTICS
