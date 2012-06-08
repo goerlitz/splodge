@@ -59,6 +59,7 @@ perl -sle '
 
   sub estimate {
     my @card;
+    my @sel;
     for (0..$#_) { # loop through array index
       my ($p, $c) = @{$_[$_]};
       $p_in_c = $pstats->{$p}->{$c};
@@ -73,14 +74,17 @@ perl -sle '
       }
       if (@p_count > 1) {
         my $triples = $p_count[0] * $p_count[1] / $p_in_c;
-        my $selectivity = $triples / $p_in_c;
+        push @sel, $triples / $p_in_c;
         push @card, $triples;
       } else {
         push @card, @p_count;
       }
-      $card = 1; $card *= $_ for (@card);
-      print "[$_] p$p, c$c: ".(join "|", @p_count)." / $p_in_c -- $card[$_]";
+#      print "[$_] p$p, c$c: ".(join "|", @p_count)." / $p_in_c -- $card[$_]";
     }
+    $card = 1; $card *= $_ for (@card);
+    $sel  = 1; $sel  *= $_ for (@sel);
+    print "sel=$sel, card=$card";
+    return ($card, $sel);
   }
 
   sub create_path_join {
@@ -141,19 +145,14 @@ perl -sle '
   $time = `date +%X`; chomp($time); print STDERR "$time generating queries";
   srand(42);  # fixed seed for rand()
 
+  $pattern = 4;
+  $sources = 4;
+  $serialize = "print_path_as_sparql";
+
   while ($runs--) {
-#    &print_path_as_id_list(&create_path_join(4,2));
-    &print_path_as_sparql(&create_path_join(4,2));
-#    &print_path_for_mysql(&create_path_join(4,2));
+    @path = &create_path_join($pattern,$sources);
+#    &{$serialize}(@path);
   }
-
-#      my ($p1c1size, $p2c2size, $p3c3size) = ($pstats->{$p1}->{$c1}, $pstats->{$p2}->{$c2}, $pstats->{$p3}->{$c3});  # number all triples for predicate in context
-#      my ($p1c1path, $p2c2path1, $p2c2path2, $p3c3path) = (@$ref[1..2], @{$stat->{$p2}->{$c2}->{$p3}->{$c3}}[1..2]); # number path triples for predicate in context
-
-#      # print SPARQL query
-#      $triples=$p2c2path1*$p2c2path2/$p2c2size;
-#      printf("# join size: %d [of %d] * %d|%d [of %d] * %d [of %d] triples\n", $p1c1path, $p1c1size, $p2c2path1, $p2c2path2, $p2c2size, $p3c3path, $p3c3size);
-#      printf("%f (%d/%d * %d/%d) %f %s -> %s -> %s\n", ($triples/$p2c2size), $p2c2path1, $p2c2size, $p2c2path2, $p2c2size, $triples, map {$pindex{$_}} $p1, $p2, $p3);
 ' -- -runs=$COUNT 
 
 echo `date +%X` "done." >&2;
