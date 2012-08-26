@@ -39,6 +39,7 @@ import java.util.zip.GZIPInputStream;
  */
 public class QueryGen {
 	
+	private static final String DATA_DIR   = "testdata/";
 	private static final String PATH_STATS = "path-stats.gz";
 	private static final String PREDICATES = "predicate-list.gz";
 	private static final String CONTEXTS   = "context-list.gz";
@@ -71,7 +72,7 @@ public class QueryGen {
 	
 	public void loadStatistics() {
 		try {
-			pStats.loadPathStatistics(openReader(new File(PATH_STATS)));
+			pStats.loadPathStatistics(openReader(new File(DATA_DIR + PATH_STATS)));
 		} catch (FileNotFoundException e) {
 			System.err.println("Error: file not found. " + e.getMessage());
 			System.exit(1);
@@ -83,8 +84,8 @@ public class QueryGen {
 	
 	public void loadDisctionaries() {
 		try {
-			loadDictionary(openReader(new File(PREDICATES)), pIndex);
-			loadDictionary(openReader(new File(CONTEXTS)), cIndex);
+			loadDictionary(openReader(new File(DATA_DIR + PREDICATES)), pIndex);
+			loadDictionary(openReader(new File(DATA_DIR + CONTEXTS)), cIndex);
 		} catch (FileNotFoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -131,10 +132,10 @@ public class QueryGen {
 		}
 
 		System.out.println("new path: " + pathJoin + ", retries: " + retries);
-		
-		for (Pair p : pathJoin) {
-			System.out.println("tp: " + pIndex.get(p.predicate) + " @ " + cIndex.get(p.source));
-		}
+		System.out.println("sparql: " + toSPARQL(pathJoin, pIndex));
+//		for (Pair p : pathJoin) {
+//			System.out.println("tp: " + pIndex.get(p.predicate) + " @ " + cIndex.get(p.source));
+//		}
 
 		pathJoin = new ArrayList<Pair>();
 	}
@@ -144,6 +145,18 @@ public class QueryGen {
 		for (int i =0; i< runs; i++) {
 			generatePathJoin(4, 4);
 		}
+	}
+	
+	private static final String toSPARQL(List<Pair> pathJoin, Map<Integer, String> pIndex) {
+		int var = 0;
+		StringBuilder builder = new StringBuilder("SELECT * WHERE { ");
+		for (Pair p : pathJoin) {
+			builder.append("?var").append(var++);
+			builder.append(" ").append(pIndex.get(p.predicate)).append(" ?var");
+			builder.append(var).append(" . ");
+		}
+		builder.append(" } ");
+		return builder.toString();
 	}
 	
 	private static final BufferedReader openReader(File file) throws FileNotFoundException, IOException {
