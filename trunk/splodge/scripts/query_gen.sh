@@ -18,7 +18,7 @@ OPTIONS:
    -t      Set threshold for minimum selectivity
    -l      Set length of path-join
    -r      Use random pattern selection
-   -e      Print estimated cardinality
+   -e      Print estimated cardinality as prefix
 EOF
 }
 
@@ -74,9 +74,9 @@ perl -sle '
 
   # choose p1, c1, p2, c2 randomly (recursive traversal of stats in hash tree)
   sub choose { my $ref=@_[0]; return (@_ && ref($ref) eq "HASH") ? map {$_, &choose($ref->{$_})} (keys %$ref)[int(rand(keys %$ref))] : () }
-  sub print_path_as_id_list { print join " -> ", map {join ":", @$_} @_ }
-  sub print_path_as_sparql { $v=1; printf "SELECT * WHERE { %s }\n", join " . ", map {"?var$v ".$pindex{@$_[0]}." ?var".++$v} @_ }
-  sub print_path_for_mysql { $v=1; print join ";;", map {"?var$v\$\$".$pindex{@$_[0]}."\$\$?var".++$v."§§".$cindex{@$_[1]}} @_ }
+  sub print_path_as_id_list { join " -> ", map {join ":", @$_} @_ }
+  sub print_path_as_sparql { $v=1; sprintf "SELECT * WHERE { %s }", join " . ", map {"?var$v ".$pindex{@$_[0]}." ?var".++$v} @_ }
+  sub print_path_for_mysql { $v=1; join ";;", map {"?var$v\$\$".$pindex{@$_[0]}."\$\$?var".++$v."§§".$cindex{@$_[1]}} @_ }
 
   sub estimate {
     my @card = ();
@@ -104,7 +104,6 @@ perl -sle '
     }
     my $card = 1; $card *= $_ for (@card);
     my $sel  = 1; $sel  *= $_ for (@sel);
-#    print "sel=$sel, card=$card";
     return ($sel, $card);
   }
 
@@ -177,6 +176,7 @@ perl -sle '
   srand(42);  # fixed seed for rand()
 
   $serialize = "print_path_as_sparql";
+  $prefix = "";
 
   while ($runs--) {
     @path = &create_path_join($length,$length);
@@ -190,15 +190,14 @@ perl -sle '
       my @minsel = ();
       push @minsel, (&estimate(@path[$_-2..$_]))[0] for (2..$#path);
       redo if (sort {$a <=> $b} @minsel)[0] < $thresh;
+
+      $prefix = "$card " if ($printcard);
     }
 
 #    print join " // ", sort {$a <=> $b} @minsel;
 #    printf "done: sel=%f, card=%f\n", $sel, $card;
 
-    if ($printcard) {
-      print "$card ";
-    }
-    &{$serialize}(@path);
+     print $prefix.&{$serialize}(@path);
   }
 ' -- -runs=$COUNT -thresh=$THRESHOLD -length=$LENGTH -random=$RANDOM -printcard=$PRINTCARD
 
