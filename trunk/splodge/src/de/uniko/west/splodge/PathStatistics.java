@@ -27,7 +27,13 @@ import java.util.Random;
 import java.util.TreeMap;
 
 /**
- * Container for managing path statistics.
+ * Index for managing path statistics.
+ * 
+ * A path is a join of two RDF triple patterns (s, p1, x) at data source s1
+ * and (x, p2, o) at data source s2. The path statistics are a mapping of
+ * (p1, s1, p2, s2) to (#entities, |(s,p1,x)@s1)|, |(x,p2,o)@s2)|).
+ * 
+ * The implementation uses nested hash maps to navigate p1->s1->p2->s2.
  * 
  * @author Olaf Goerlitz (goerlitz@uni-koblenz.de)
  */
@@ -49,6 +55,11 @@ public class PathStatistics {
 		return it.next();
 	}
 	
+	/**
+	 * Returns a random choice of p1,s1,p2,s2 combination.
+	 * 
+	 * @return random index values for p1,s1,p2,d2.
+	 */
 	public int[] pickPathJoin() {
 		int p1 = getKey(rand.nextInt(this.pathStats.size()), this.pathStats);
 		Map<Integer, Map<Integer, Map<Integer, List<Integer>>>> c1Stats = this.pathStats.get(p1);
@@ -57,6 +68,13 @@ public class PathStatistics {
 		return pickPathJoin(p1, c1);
 	}
 	
+	/**
+	 * Returns a random choice of p2,s2 combination for a given p1 and c1.
+	 * 
+	 * @param p1 predicate index.
+	 * @param c1 context index.
+	 * @return random index values for p2,d2 combined with p1 and c1.
+	 */
 	public int[] pickPathJoin(int p1, int c1) {
 		Map<Integer, Map<Integer, Map<Integer, List<Integer>>>> c1Stats = this.pathStats.get(p1);
 		Map<Integer, Map<Integer, List<Integer>>> p2Stats = c1Stats.get(c1);
@@ -67,11 +85,23 @@ public class PathStatistics {
 		return new int[] { p1, c1, p2, c2 };
 	}
 	
+	/**
+	 * Tests if the combination of p1 and c1 exists in the path statistics.
+	 * 
+	 * @param p1 predicate index.
+	 * @param c1 context index.
+	 * @return true if the combination of p1 and c1 exists; false otherwise.
+	 */
 	public boolean exists(int p1, int c1) {
 		return pathStats.get(p1) != null && pathStats.get(p1).get(c1) != null;
 	}
-	
-//	pred1, pred2, source1, source2, entityCount, triple1Count, triple2Count
+
+	/**
+	 * Loads path statistics from a text file.
+	 * The initialization of the nested hash maps is quite ugly in Java.
+	 * 
+	 * @param reader BufferedReader on top of the input text file.
+	 */
 	public void loadPathStatistics(BufferedReader reader) {
 		try {
 			

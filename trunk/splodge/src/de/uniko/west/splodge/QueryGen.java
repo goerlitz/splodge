@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,10 +41,12 @@ public class QueryGen {
 	private static final String DATA_DIR   = "testdata/";
 	private static final String PATH_STATS = "path-stats.gz";
 	private static final String PREDICATES = "predicate-list.gz";
+	private static final String PRED_STATS = "predicate-stats.gz";
 	private static final String CONTEXTS   = "context-list.gz";
 	private static final Random RAND = new Random(42);
 	private static final int QUERIES = 10;
 	
+	private Map<Integer, Map<Integer, Integer>> predStats = new HashMap<Integer, Map<Integer,Integer>>();
 	private PathStatistics pStats = new PathStatistics(RAND);
 	private Map<Integer, String> pIndex = new HashMap<Integer, String>();
 	private Map<Integer, String> cIndex = new HashMap<Integer, String>();
@@ -63,11 +64,42 @@ public class QueryGen {
 		// loading statistics
 		gen.loadStatistics();
 		gen.loadDisctionaries();
+		gen.loadPredicateStats();
 
 		// loading configuration
 		
 		// generating queries
 		gen.generateQueries(QUERIES);
+	}
+	
+	public void loadPredicateStats() {
+		try {
+			BufferedReader reader = openReader(new File(DATA_DIR + PRED_STATS));
+			String line = "";
+			while ((line = reader.readLine()) != null) {
+				String[] parts = line.split(" "); // predicateID, #triple, #source, #triplesPerSource[]
+				int predID = Integer.parseInt(parts[0]);
+				Map<Integer, Integer> pMap = predStats.get(predID);
+				if (pMap == null) {
+					pMap = new HashMap<Integer, Integer>();
+					predStats.put(predID, pMap);
+				}
+				
+				// process individual triple counts per source
+				for (String count : parts[3].split(",")) {
+					String[] keyValue = count.split(":");
+					int key = Integer.parseInt(keyValue[0]);
+					int val = Integer.parseInt(keyValue[1]);
+					pMap.put(key, val);
+				}
+			}
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 	
 	public void loadStatistics() {
@@ -102,6 +134,10 @@ public class QueryGen {
 		while ((line = reader.readLine()) != null) {
 			map.put(pos++, line);
 		}
+	}
+	
+	public void computePathSelectivity() {
+		
 	}
 	
 	public void generatePathJoin(int numPatterns, int numSources) {
