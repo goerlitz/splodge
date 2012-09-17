@@ -51,8 +51,7 @@ object QueryGenerator {
   }
 
   def loadDict(lines: Iterator[String], index: Map[Int, String]): Unit = {
-    var n = 1;
-    for (line <- lines) index += (n -> line);
+    var n = 1; for (line <- lines) { index += (n -> line); n += 1 };
   }
 
   /**
@@ -65,6 +64,7 @@ object QueryGenerator {
   def loadPathStats(lines: Iterator[String]): Unit = {
     for (line <- lines) {
       val Array(p1, p2, s1, s2, res, t1, t2) = line.split(' ') map (_.toInt)
+      // TODO: handle same source and cross sources path stats
       if (s1 != s2)
     	  pStats.getOrElseUpdate(p1, HashMap()).getOrElseUpdate(s1, HashMap()).getOrElseUpdate(p2, HashMap()).getOrElseUpdate(s2.toInt, Array(res, t1, t2));
     }
@@ -96,6 +96,12 @@ object QueryGenerator {
     }
     joins
   }
+  
+  def printSPARQL(path: List[(Int, Int)]) = {
+    var n = 0;
+    val pattern = path map { x => n += 1; "?var%s %s ?var%s".format(n, pIndex.get(x._1).get, n+1)}
+    printf("SELECT * WHERE { %s }\n", pattern.mkString(" . ")) 
+  }
 
   def main(args: Array[String]): Unit = {
     val now = System.currentTimeMillis
@@ -105,9 +111,7 @@ object QueryGenerator {
     loadDict(open(new File(PREDICATES)).getLines, pIndex)
     loadDict(open(new File(CONTEXTS)).getLines, cIndex)
 
-    for (i <- 1 to 10) {
-      println("path: " + createPathJoin(4))
-    }
+    for (i <- 1 to 10) printSPARQL(createPathJoin(4))
 
     println("total time taken: %f seconds".format((System.currentTimeMillis - now) / 1e3))
   }
