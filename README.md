@@ -8,7 +8,7 @@ The generation process consists of two steps.
   1. pre-processing and computing statistics
   1. query generation
 
-In order to run the query generation for the BTC 2011 dataset, just download the [pre-processed data](http://code.google.com/p/splodge/downloads/detail?name=btc2011_pre-processed.zip&can=2&q=) from the download section, unzip it, unzip the included context-list.gz and predicate-list.gz, and run query-gen.sh like this:
+In order to run the query generation for the BTC 2011 dataset, just download the [pre-processed data](https://github.com/goerlitz/splodge/releases/download/ISWC-2012/btc2011_pre-processed.zip) from the download section, unzip it, unzip the included context-list.gz and predicate-list.gz, and run query-gen.sh like this:
 
 ```
 scripts/query_gen.sh -c context-list -p predicate-list
